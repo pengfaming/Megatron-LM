@@ -62,18 +62,16 @@ quantization, use the [Megatron-Bridge quantization examples](https://github.com
 
 The [NVIDIA NGC NeMo container catalog](https://catalog.ngc.nvidia.com/orgs/nvidia/-/containers/nemo/-/tags)
 lists the current release. The example below uses `26.08`; the NeMo container provides
-Megatron-Bridge at `/opt/Megatron-Bridge`. It mounts a local Megatron-Bridge checkout at that
-location, as well as a local Hugging Face model and a directory for the imported checkpoint.
+Megatron-Bridge at `/opt/Megatron-Bridge`. It mounts a local Hugging Face model and a directory
+for the imported checkpoint.
 
 ```sh
-MEGATRON_BRIDGE_PATH=/path/to/Megatron-Bridge
 HF_MODEL_PATH=/path/to/hf/Llama-3.2-1B-Instruct
 MEGATRON_MODEL_PATH=/path/to/checkpoints/Llama-3.2-1B-Instruct
 HF_TOKEN=<your_hugging_face_access_token>
 
 docker run --rm -it --shm-size=24g \
     -e HF_TOKEN \
-    -v "${MEGATRON_BRIDGE_PATH}:/opt/Megatron-Bridge" \
     -v "${HF_MODEL_PATH}:/models/hf/Llama-3.2-1B-Instruct:ro" \
     -v "${MEGATRON_MODEL_PATH}:/models/megatron/Llama-3.2-1B-Instruct" \
     -w /opt/Megatron-Bridge \
@@ -83,11 +81,6 @@ docker run --rm -it --shm-size=24g \
         --hf-model /models/hf/Llama-3.2-1B-Instruct \
         --megatron-path /models/megatron/Llama-3.2-1B-Instruct
 ```
-
-Because the example overlays the container's bundled Megatron-Bridge checkout, run
-`cd /opt/NeMo-FW && uv sync --no-cache-dir --all-groups --inexact` inside the container before
-conversion to synchronize the mounted checkout. This step is unnecessary when using the bundled
-checkout without a bind mount.
 
 #### Choosing CPU or GPU for the import
 
