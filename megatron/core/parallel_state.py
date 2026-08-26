@@ -229,6 +229,10 @@ def update_pg_timeout(
             raise e
 
 
+# Every ProcessGroup create_group has handed out, in creation order.
+_CREATED_PROCESS_GROUPS: List[torch.distributed.ProcessGroup] = []
+
+
 def create_group(
     ranks=None,
     timeout=None,
@@ -257,6 +261,10 @@ def create_group(
             # type error.
             kwargs.pop("timeout")
     group = torch.distributed.new_group(**kwargs)
+    # Tracked so destroy_model_parallel can release them. Clearing the module globals only
+    # drops Megatron's reference; c10d keeps its own, so the communicator would survive and,
+    # with NVLS enabled, hold a multicast reservation for the life of the process.
+    _CREATED_PROCESS_GROUPS.append(group)
     global _global_process_group_list
     if _global_process_group_list is None:
         # None stands for the default process group
@@ -2502,6 +2510,15 @@ def get_all_ranks():
     return "_".join(map(lambda x: str(x or 0), ranks))
 
 
+def _destroy_created_process_groups():
+    """Destroy every ProcessGroup create_group made, newest first.
+
+    Aliases are assignments rather than creations, so each group appears here once.
+    """
+    while _CREATED_PROCESS_GROUPS:
+        torch.distributed.destroy_process_group(_CREATED_PROCESS_GROUPS.pop())
+
+
 def destroy_model_parallel():
     """Set the groups to none."""
     # Release the NCCL EP context (if the 'ncclep' flex dispatcher bootstrapped one) before the
@@ -2514,6 +2531,8 @@ def destroy_model_parallel():
         nccl_ep_finalize()
     except Exception:  # finalize must never block teardown
         pass
+
+    _destroy_created_process_groups()
 
     global _MODEL_PARALLEL_GROUP
     _MODEL_PARALLEL_GROUP = None
