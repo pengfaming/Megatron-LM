@@ -139,6 +139,19 @@ def test_initialize_and_destroy_model_parallel(order):
     assert ps._MODEL_PARALLEL_GROUP is None
 
 
+def test_reset_model_parallel_preserves_process_groups():
+    """A reset clears Megatron globals without invalidating live process-group users."""
+    Utils.initialize_model_parallel(tensor_model_parallel_size=world_size)
+    tensor_parallel_group = ps.get_tensor_model_parallel_group()
+
+    ps.reset_model_parallel()
+    assert torch.distributed.get_backend(tensor_parallel_group) == 'nccl'
+
+    Utils.destroy_model_parallel()
+    with pytest.raises(ValueError, match="not initialized"):
+        torch.distributed.get_backend(tensor_parallel_group)
+
+
 @pytest.mark.parametrize('order', test_parallel_order)
 def test_pipeline_parallel_initializations(order):
     Utils.initialize_model_parallel(

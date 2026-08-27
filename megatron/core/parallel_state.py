@@ -2519,20 +2519,21 @@ def _destroy_created_process_groups():
         torch.distributed.destroy_process_group(_CREATED_PROCESS_GROUPS.pop())
 
 
-def destroy_model_parallel():
-    """Set the groups to none."""
-    # Release the NCCL EP context (if the 'ncclep' flex dispatcher bootstrapped one) before the
-    # process group's communicator is torn down. TE registers an atexit ep_finalize that would
-    # otherwise run after dist.destroy_process_group() and hit a "corrupted comm object" at exit.
-    # Idempotent and a no-op when NCCL EP was never bootstrapped.
-    try:
-        from megatron.core.transformer.moe.fused_a2a import nccl_ep_finalize
+def _reset_model_parallel_state(destroy_process_groups: bool) -> None:
+    """Clear model-parallel globals, optionally destroying their process groups."""
+    if destroy_process_groups:
+        # Release the NCCL EP context (if the 'ncclep' flex dispatcher bootstrapped one) before
+        # the process group's communicator is torn down. TE registers an atexit ep_finalize that
+        # would otherwise run after dist.destroy_process_group() and hit a corrupted comm object
+        # at exit. Idempotent and a no-op when NCCL EP was never bootstrapped.
+        try:
+            from megatron.core.transformer.moe.fused_a2a import nccl_ep_finalize
 
-        nccl_ep_finalize()
-    except Exception:  # finalize must never block teardown
-        pass
+            nccl_ep_finalize()
+        except Exception:  # finalize must never block teardown
+            pass
 
-    _destroy_created_process_groups()
+        _destroy_created_process_groups()
 
     global _MODEL_PARALLEL_GROUP
     _MODEL_PARALLEL_GROUP = None
@@ -2611,7 +2612,8 @@ def destroy_model_parallel():
 
     global _DATA_PARALLEL_GROUP_GLOO
     if (
-        _DATA_PARALLEL_GROUP_GLOO is not None
+        destroy_process_groups
+        and _DATA_PARALLEL_GROUP_GLOO is not None
         and torch.distributed.distributed_c10d._world.pg_map.get(_DATA_PARALLEL_GROUP_GLOO, None)
         is not None
     ):
@@ -2620,7 +2622,8 @@ def destroy_model_parallel():
 
     global _DATA_PARALLEL_GROUP_WITH_CP_GLOO
     if (
-        _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None
+        destroy_process_groups
+        and _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None
         and torch.distributed.distributed_c10d._world.pg_map.get(
             _DATA_PARALLEL_GROUP_WITH_CP_GLOO, None
         )
@@ -2674,7 +2677,8 @@ def destroy_model_parallel():
 
     global _EXPERT_DATA_PARALLEL_GROUP_GLOO
     if (
-        _EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
+        destroy_process_groups
+        and _EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
         and torch.distributed.distributed_c10d._world.pg_map.get(
             _EXPERT_DATA_PARALLEL_GROUP_GLOO, None
         )
@@ -2688,7 +2692,8 @@ def destroy_model_parallel():
 
     global _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO
     if (
-        _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
+        destroy_process_groups
+        and _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
         and torch.distributed.distributed_c10d._world.pg_map.get(
             _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO, None
         )
@@ -2708,3 +2713,17 @@ def destroy_model_parallel():
     _global_process_group_list = None
 
     SymmetricMemoryManager.destroy()
+
+
+def reset_model_parallel() -> None:
+    """Clear model-parallel globals without destroying their process groups.
+
+    Use this only when live objects, such as a serialized ``DeviceMesh``, still require the
+    current process groups after a new model-parallel configuration is initialized.
+    """
+    _reset_model_parallel_state(destroy_process_groups=False)
+
+
+def destroy_model_parallel() -> None:
+    """Destroy model-parallel process groups and clear their global state."""
+    _reset_model_parallel_state(destroy_process_groups=True)
