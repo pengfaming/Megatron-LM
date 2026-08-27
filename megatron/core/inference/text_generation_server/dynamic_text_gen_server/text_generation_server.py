@@ -50,6 +50,7 @@ async def _run_text_gen_server(
     fd: Optional[int] = None,
     hostname: Optional[str] = None,
     chat_template: Optional[str] = None,
+    default_temperature: float = 1.0,
     default_top_p: float = 1.0,
     default_top_k: int = 0,
     eval_mode: bool = False,
@@ -85,6 +86,7 @@ async def _run_text_gen_server(
         app.config['parsers'] = parsers
         app.config['verbose'] = verbose
         app.config['chat_template'] = chat_template
+        app.config['default_temperature'] = default_temperature
         app.config['default_top_p'] = default_top_p
         app.config['default_top_k'] = default_top_k
         app.config['eval_mode'] = eval_mode
@@ -109,7 +111,10 @@ async def _run_text_gen_server(
             logger.info(f"Starting text generation server on http://{hostname}:{server_port}")
             logger.info(f"Using tokenizer: {type(tokenizer)}")
             logger.info(f"Using parsers: {parsers}")
-            logger.info(f"Default sampling: top_p={default_top_p}, top_k={default_top_k}")
+            logger.info(
+                f"Default sampling: temperature={default_temperature}, "
+                f"top_p={default_top_p}, top_k={default_top_k}"
+            )
             logger.info(f"Evaluation mode: {eval_mode}")
 
         # Quart is natively ASGI, so we can serve the app directly
@@ -131,6 +136,7 @@ def _server_process_worker(
     fd: Optional[int] = None,
     hostname: Optional[str] = None,
     chat_template: Optional[str] = None,
+    default_temperature: float = 1.0,
     default_top_p: float = 1.0,
     default_top_k: int = 0,
     eval_mode: bool = False,
@@ -150,6 +156,7 @@ def _server_process_worker(
                 fd,
                 hostname,
                 chat_template,
+                default_temperature,
                 default_top_p,
                 default_top_k,
                 eval_mode,
@@ -177,6 +184,7 @@ def start_text_gen_server(
     hostname: Optional[str] = None,
     sock: Optional[socket.socket] = None,
     chat_template: Optional[str] = None,
+    default_temperature: float = 1.0,
     default_top_p: float = 1.0,
     default_top_k: int = 0,
     eval_mode: bool = False,
@@ -229,6 +237,7 @@ def start_text_gen_server(
                 fd,
                 hostname,
                 chat_template,
+                default_temperature,
                 default_top_p,
                 default_top_k,
                 eval_mode,

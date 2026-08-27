@@ -71,6 +71,12 @@ def add_text_generation_server_args(parser: argparse.ArgumentParser):
     # The chat_completions endpoint reads it from args.chat_template via
     # _load_chat_template, which accepts either a file path or an inline string.
     parser.add_argument(
+        "--default-temperature",
+        type=float,
+        default=1.0,
+        help="Default temperature sampling value when a request does not specify temperature.",
+    )
+    parser.add_argument(
         "--default-top-p",
         type=float,
         default=1.0,
@@ -183,6 +189,7 @@ async def run_text_generation_server(
     server_port: int,
     hostname: str | None = None,
     chat_template: str | None = None,
+    default_temperature: float = 1.0,
     default_top_p: float = 1.0,
     default_top_k: int = 0,
     eval_mode: bool = False,
@@ -197,6 +204,7 @@ async def run_text_generation_server(
         server_port (int): The network for port the frontend text generation server.
         hostname (str | None): Hostname or IP address for coordinator and HTTP traffic.
         chat_template (str | None): Inline chat template or contents loaded from a file.
+        default_temperature (float): Sampling default when a request omits `temperature`.
         default_top_p (float): Sampling default when a request omits `top_p`.
         default_top_k (int): Sampling default when a request omits `top_k`.
         eval_mode (bool): Whether to use evaluation response defaults.
@@ -221,6 +229,7 @@ async def run_text_generation_server(
                 verbose=args.inference_text_gen_server_logging,
                 hostname=hostname,
                 chat_template=chat_template,
+                default_temperature=default_temperature,
                 default_top_p=default_top_p,
                 default_top_k=default_top_k,
                 eval_mode=eval_mode,
@@ -339,6 +348,7 @@ if __name__ == "__main__":
                     args.port,
                     args.host,
                     chat_template=chat_template,
+                    default_temperature=args.default_temperature,
                     default_top_p=args.default_top_p,
                     default_top_k=args.default_top_k,
                     eval_mode=args.eval_mode,

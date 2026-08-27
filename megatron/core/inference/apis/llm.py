@@ -216,6 +216,7 @@ class MegatronLLM(_MegatronLLMBase):
                 num_replicas=serve_config.frontend_replicas,
                 hostname=serve_config.host,
                 sock=serve_config.sock,
+                default_temperature=serve_config.default_temperature,
                 default_top_p=serve_config.default_top_p,
                 default_top_k=serve_config.default_top_k,
                 eval_mode=serve_config.eval_mode,
