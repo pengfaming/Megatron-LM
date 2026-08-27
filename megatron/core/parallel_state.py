@@ -2519,21 +2519,8 @@ def _destroy_created_process_groups():
         torch.distributed.destroy_process_group(_CREATED_PROCESS_GROUPS.pop())
 
 
-def _reset_model_parallel_state(destroy_process_groups: bool) -> None:
-    """Clear model-parallel globals, optionally destroying their process groups."""
-    if destroy_process_groups:
-        # Release the NCCL EP context (if the 'ncclep' flex dispatcher bootstrapped one) before
-        # the process group's communicator is torn down. TE registers an atexit ep_finalize that
-        # would otherwise run after dist.destroy_process_group() and hit a corrupted comm object
-        # at exit. Idempotent and a no-op when NCCL EP was never bootstrapped.
-        try:
-            from megatron.core.transformer.moe.fused_a2a import nccl_ep_finalize
-
-            nccl_ep_finalize()
-        except Exception:  # finalize must never block teardown
-            pass
-
-        _destroy_created_process_groups()
+def _clear_model_parallel_state() -> None:
+    """Clear model-parallel globals without destroying process groups."""
 
     global _MODEL_PARALLEL_GROUP
     _MODEL_PARALLEL_GROUP = None
@@ -2611,25 +2598,9 @@ def _reset_model_parallel_state(destroy_process_groups: bool) -> None:
     _GLOBAL_MEMORY_BUFFER = None
 
     global _DATA_PARALLEL_GROUP_GLOO
-    if (
-        destroy_process_groups
-        and _DATA_PARALLEL_GROUP_GLOO is not None
-        and torch.distributed.distributed_c10d._world.pg_map.get(_DATA_PARALLEL_GROUP_GLOO, None)
-        is not None
-    ):
-        torch.distributed.destroy_process_group(_DATA_PARALLEL_GROUP_GLOO)
     _DATA_PARALLEL_GROUP_GLOO = None
 
     global _DATA_PARALLEL_GROUP_WITH_CP_GLOO
-    if (
-        destroy_process_groups
-        and _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None
-        and torch.distributed.distributed_c10d._world.pg_map.get(
-            _DATA_PARALLEL_GROUP_WITH_CP_GLOO, None
-        )
-        is not None
-    ):
-        torch.distributed.destroy_process_group(_DATA_PARALLEL_GROUP_WITH_CP_GLOO)
     _DATA_PARALLEL_GROUP_WITH_CP_GLOO = None
 
     # Destroy parallel state related to expert parallelism.
@@ -2676,30 +2647,12 @@ def _reset_model_parallel_state(destroy_process_groups: bool) -> None:
     _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_WITH_GTP_REMAT = None
 
     global _EXPERT_DATA_PARALLEL_GROUP_GLOO
-    if (
-        destroy_process_groups
-        and _EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
-        and torch.distributed.distributed_c10d._world.pg_map.get(
-            _EXPERT_DATA_PARALLEL_GROUP_GLOO, None
-        )
-        is not None
-    ):
-        torch.distributed.destroy_process_group(_EXPERT_DATA_PARALLEL_GROUP_GLOO)
     _EXPERT_DATA_PARALLEL_GROUP_GLOO = None
 
     global _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP
     _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP = None
 
     global _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO
-    if (
-        destroy_process_groups
-        and _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO is not None
-        and torch.distributed.distributed_c10d._world.pg_map.get(
-            _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO, None
-        )
-        is not None
-    ):
-        torch.distributed.destroy_process_group(_INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO)
     _INTRA_PARTIAL_EXPERT_DATA_PARALLEL_GROUP_GLOO = None
 
     global _INTER_PARTIAL_EXPERT_DATA_PARALLEL_GROUP
@@ -2721,9 +2674,21 @@ def reset_model_parallel() -> None:
     Use this only when live objects, such as a serialized ``DeviceMesh``, still require the
     current process groups after a new model-parallel configuration is initialized.
     """
-    _reset_model_parallel_state(destroy_process_groups=False)
+    _clear_model_parallel_state()
 
 
 def destroy_model_parallel() -> None:
     """Destroy model-parallel process groups and clear their global state."""
-    _reset_model_parallel_state(destroy_process_groups=True)
+    # Release the NCCL EP context (if the 'ncclep' flex dispatcher bootstrapped one) before the
+    # process group's communicator is torn down. TE registers an atexit ep_finalize that would
+    # otherwise run after dist.destroy_process_group() and hit a corrupted comm object at exit.
+    # Idempotent and a no-op when NCCL EP was never bootstrapped.
+    try:
+        from megatron.core.transformer.moe.fused_a2a import nccl_ep_finalize
+
+        nccl_ep_finalize()
+    except Exception:  # finalize must never block teardown
+        pass
+
+    _destroy_created_process_groups()
+    _clear_model_parallel_state()
