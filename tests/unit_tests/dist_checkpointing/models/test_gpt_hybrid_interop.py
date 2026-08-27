@@ -675,14 +675,11 @@ def _run_gpt_to_hybrid_optimizer_load(
             _configure_checkpoint_args(mock_args, ckpt_dir, src_parallel, moe, use_megatron_fsdp)
             mock_args.num_layers = num_gpt_layers
             save_checkpoint(10, gpt_model, gpt_optimizer, None, 0)
-            # The FSDP checkpoint contains DeviceMesh metadata that resolves the source process
-            # groups while loading. Reset the Megatron globals to build the destination layout,
-            # but keep the source process groups alive until this cross-layout load completes.
-            ps.reset_model_parallel()
+            Utils.destroy_model_parallel()
 
             # Build a hybrid model + optimizer (independently seeded moments) and
             # load the GPT checkpoint, translating model and optimizer state.
-            ps.initialize_model_parallel(
+            Utils.initialize_model_parallel(
                 dest_tp,
                 dest_pp,
                 context_parallel_size=dest_cp,
